@@ -3,6 +3,7 @@ import { verifyUserWithWarEra } from '../../services/verification.js';
 import { WARERA_COUNTRY_MAP } from '../../config/countries.js';
 
 export async function handleIdentify(interaction: ChatInputCommandInteraction): Promise<void> {
+  await interaction.deferReply({ ephemeral: true });
   const wareraUsername = interaction.options.getString('username', true);
   const userId = interaction.user.id;
 
@@ -11,9 +12,8 @@ export async function handleIdentify(interaction: ChatInputCommandInteraction): 
     const result = await verifyUserWithWarEra(userId, wareraUsername);
 
     if (!result.success) {
-      await interaction.reply({
+      await interaction.editReply({
         content: `❌ ${result.message}`,
-        ephemeral: true,
       });
       return;
     }
@@ -66,15 +66,13 @@ export async function handleIdentify(interaction: ChatInputCommandInteraction): 
 
     responseMessage += `\n\nYou now have access to your country's channels!`;
 
-    await interaction.reply({
+    await interaction.editReply({
       content: responseMessage,
-      ephemeral: true,
     });
   } catch (error) {
     console.error('Error in identify command:', error);
-    await interaction.reply({
+    await interaction.editReply({
       content: '❌ An error occurred while verifying. Please try again later.',
-      ephemeral: true,
     });
   }
 }
