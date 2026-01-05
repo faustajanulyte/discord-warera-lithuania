@@ -36,7 +36,7 @@ async function inspectUserData() {
     return;
   }
 
-  const data = await response.json();
+  const data = (await response.json()) as any;
   const userData = data?.result?.data;
 
   if (!userData) {

@@ -57,7 +57,7 @@ export async function searchUser(username: string): Promise<SearchResult | null>
       return null;
     }
 
-    const data = await response.json();
+    const data = (await response.json()) as any;
 
     // Search API returns: { result: { data: { userIds: [...], muIds: [], ... } } }
     const searchData = data?.result?.data;
@@ -101,7 +101,7 @@ export async function getUserById(userId: string | number): Promise<WarEraUser |
       return null;
     }
 
-    const data = await response.json();
+    const data = (await response.json()) as any;
     const userData = data?.result?.data;
 
     if (!userData || !userData._id) {
@@ -162,7 +162,7 @@ export async function getCountryById(countryId: number | string): Promise<WarEra
       return null;
     }
 
-    const data = await response.json();
+    const data = (await response.json()) as any;
     const countryData = data?.result?.data;
 
     if (!countryData || !countryData._id) {
@@ -201,7 +201,7 @@ export async function getAllCountries(): Promise<WarEraCountry[]> {
       return [];
     }
 
-    const data = await response.json();
+    const data = (await response.json()) as any;
     const countries = data?.result?.data;
 
     if (!Array.isArray(countries)) {
