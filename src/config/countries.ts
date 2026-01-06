@@ -389,8 +389,7 @@ export const CONTINENT_EMBASSIES = {
 export const ROLE_COLORS = {
   PRESIDENT: 0xffd700, // Gold
   GOVERNMENT: 0x9b59b6, // Purple
-  MODS: 0x3498db, // Blue
-  AUTHENTICATOR: 0x2ecc71, // Green
+  ALLY: 0x3498db, // Blue
   VERIFIED: 0x5865f2, // Discord Blurple
   LITHUANIA: 0xe67e22, // Orange
   COUNTRY: 0x99aab5, // Discord Gray
@@ -399,4 +398,4 @@ export const ROLE_COLORS = {
 /**
  * Admin/leadership roles that have access to government channels and all embassies
  */
-export const LEADERSHIP_ROLES = ['President', 'Government', 'Mods'] as const;
+export const LEADERSHIP_ROLES = ['President', 'Government'] as const;

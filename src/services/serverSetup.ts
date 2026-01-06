@@ -19,8 +19,7 @@ interface SetupResult {
   roles?: {
     president?: Role;
     government?: Role;
-    mods?: Role;
-    authenticator?: Role;
+    ally?: Role;
     verified?: Role;
     lithuania?: Role;
     countries: Map<string, Role>;
@@ -30,23 +29,25 @@ interface SetupResult {
     announcements: TextChannel[];
     community: TextChannel[];
     government?: TextChannel;
+    voting: TextChannel[];
     embassies: Map<string, TextChannel>;
   };
 }
 
 /**
- * Performs full server setup:
- * 1. Creates admin roles (President, Government, Mods, Authenticator)
+ * Performs full server setup or update:
+ * 1. Creates admin roles (President, Government, Ally)
  * 2. Creates base roles (Verified, Lithuania)
  * 3. Creates country roles based on WarEra country map
- * 4. Creates channel categories and channels with proper permissions
- * 5. Creates continent-based embassy categories with embassy channels
+ * 4. Creates/Updates channel categories and channels with proper permissions
+ * 5. Creates/Updates continent-based embassy categories with embassy channels
+ * 6. Ensures leadership roles are at the top
  */
 export async function setupServer(guild: Guild): Promise<SetupResult> {
   try {
     // Step 1: Create admin/leadership roles
     console.log('\n📋 Step 1: Creating leadership roles...');
-    const { president, government, mods, authenticator } = await createLeadershipRoles(guild);
+    const { president, government, ally } = await createLeadershipRoles(guild);
     console.log('✅ Leadership roles ready');
 
     // Step 2: Create Verified and Lithuania roles
@@ -62,7 +63,7 @@ export async function setupServer(guild: Guild): Promise<SetupResult> {
 
     // Step 4: Create public channels
     console.log('\n📋 Step 4: Creating public channels...');
-    const publicChannels = await createPublicChannels(guild);
+    const publicChannels = await createPublicChannels(guild, government, president);
     console.log('✅ Public channels ready');
 
     // Step 5: Create announcement channels
@@ -75,42 +76,50 @@ export async function setupServer(guild: Guild): Promise<SetupResult> {
     const communityChannels = await createCommunityChannels(guild, verified, lithuania);
     console.log('✅ Community channels ready');
 
-    // Step 7: Create government channel
-    console.log('\n📋 Step 7: Creating government channel...');
-    const governmentChannel = await createGovernmentChannel(guild, government, president, mods);
+    // Step 7: Create voting channels
+    console.log('\n📋 Step 7: Creating voting channels...');
+    const votingChannels = await createVotingChannels(guild, lithuania, government, president);
+    console.log('✅ Voting channels ready');
+
+    // Step 8: Create government channel
+    console.log('\n📋 Step 8: Creating government channel...');
+    const governmentChannel = await createGovernmentChannel(guild, government, president);
     console.log('✅ Government channel ready');
 
-    // Step 8: Create embassy categories and channels
-    console.log('\n📋 Step 8: Creating embassy categories and channels...');
+    // Step 9: Create embassy categories and channels
+    console.log('\n📋 Step 9: Creating embassy categories and channels...');
     const embassyChannels = await createEmbassyStructure(
       guild,
       countryRoles,
       government,
-      president,
-      mods
+      president
     );
     console.log(`✅ Embassy channels ready: ${embassyChannels.size} embassies`);
+
+    // Step 10: Role reordering
+    console.log('\n📋 Step 10: Ensuring leadership roles are at the top...');
+    await ensureLeadershipRolesPosition(guild, [president, government]);
 
     return {
       success: true,
       message:
         `Server setup complete!\n\n` +
-        `✅ Created leadership roles (President, Government, Mods, Authenticator)\n` +
+        `✅ Created leadership roles (President, Government, Ally)\n` +
         `✅ Created base roles (Verified, Lithuania)\n` +
         `✅ Created ${countryRoles.size} country roles\n` +
         `✅ Created public channels (#welcome, #rules)\n` +
-        `✅ Created announcement channels (#announcements, #voting) - Lithuania only\n` +
-        `✅ Created community channels (#memes, #game-help, #chat, #chat-for-dummies)\n` +
+        `✅ Created announcement channel (#announcements)\n` +
+        `✅ Created voting channels (#government-voting, #public-voting)\n` +
+        `✅ Created community channels (#memes, #game-help, #chat, #lithuania-chat, #chat-for-dummies)\n` +
         `✅ Created #government channel\n` +
         `✅ Created ${embassyChannels.size} embassy channels\n\n` +
         `**Next steps:**\n` +
-        `1. Assign President/Government/Mods roles to appropriate members\n` +
+        `1. Assign President/Government roles to appropriate members\n` +
         `2. Users can verify with /identify to get their country role`,
       roles: {
         president,
         government,
-        mods,
-        authenticator,
+        ally,
         verified,
         lithuania,
         countries: countryRoles,
@@ -119,6 +128,7 @@ export async function setupServer(guild: Guild): Promise<SetupResult> {
         public: publicChannels,
         announcements: announcementChannels,
         community: communityChannels,
+        voting: votingChannels,
         government: governmentChannel,
         embassies: embassyChannels,
       },
@@ -145,6 +155,21 @@ async function createRole(
   const existingRole = guild.roles.cache.find((role) => role.name === name);
   if (existingRole) {
     console.log(`  ✓ Role @${name} already exists`);
+    // Update permissions if needed
+    if (permissions.length > 0) {
+      const currentPerms = existingRole.permissions;
+      let needsUpdate = false;
+      for (const perm of permissions) {
+        if (!currentPerms.has(perm)) {
+          needsUpdate = true;
+          break;
+        }
+      }
+      if (needsUpdate) {
+        console.log(`  Updating permissions for @${name}...`);
+        await existingRole.setPermissions(permissions);
+      }
+    }
     return existingRole;
   }
 
@@ -163,13 +188,12 @@ async function createRole(
 }
 
 /**
- * Creates leadership roles: President, Government, Mods, Authenticator
+ * Creates leadership roles: President, Government, Ally
  */
 async function createLeadershipRoles(guild: Guild): Promise<{
   president: Role;
   government: Role;
-  mods: Role;
-  authenticator: Role;
+  ally: Role;
 }> {
   // President and Government get Manage Roles permission
   const president = await createRole(guild, 'President', ROLE_COLORS.PRESIDENT, [
@@ -178,10 +202,9 @@ async function createLeadershipRoles(guild: Guild): Promise<{
   const government = await createRole(guild, 'Government', ROLE_COLORS.GOVERNMENT, [
     PermissionFlagsBits.ManageRoles,
   ]);
-  const mods = await createRole(guild, 'Mods', ROLE_COLORS.MODS);
-  const authenticator = await createRole(guild, 'Authenticator', ROLE_COLORS.AUTHENTICATOR);
+  const ally = await createRole(guild, 'Ally', ROLE_COLORS.ALLY);
 
-  return { president, government, mods, authenticator };
+  return { president, government, ally };
 }
 
 /**
@@ -249,6 +272,10 @@ async function getOrCreateCategory(
 
   if (existingCategory) {
     console.log(`  ✓ Category "${name}" already exists`);
+    // Update permission overwrites if provided
+    if (permissionOverwrites.length > 0) {
+      await existingCategory.permissionOverwrites.set(permissionOverwrites);
+    }
     return existingCategory;
   }
 
@@ -285,6 +312,10 @@ async function getOrCreateChannel(
 
   if (existingChannel) {
     console.log(`    ✓ #${name} already exists`);
+    // Update permission overwrites if provided
+    if (options.permissionOverwrites) {
+      await existingChannel.permissionOverwrites.set(options.permissionOverwrites);
+    }
     return existingChannel;
   }
 
@@ -305,7 +336,7 @@ async function getOrCreateChannel(
 /**
  * Creates public channels: #welcome, #rules
  */
-async function createPublicChannels(guild: Guild): Promise<TextChannel[]> {
+async function createPublicChannels(guild: Guild, government: Role, president: Role): Promise<TextChannel[]> {
   const category = await getOrCreateCategory(guild, '📋 PUBLIC');
 
   const channels: TextChannel[] = [];
@@ -318,7 +349,7 @@ async function createPublicChannels(guild: Guild): Promise<TextChannel[]> {
     })
   );
 
-  // #rules - everyone can read only
+  // #rules - everyone can read only, leadership can post
   channels.push(
     await getOrCreateChannel(guild, 'rules', {
       parent: category,
@@ -328,6 +359,14 @@ async function createPublicChannels(guild: Guild): Promise<TextChannel[]> {
           id: guild.id, // @everyone
           deny: [PermissionFlagsBits.SendMessages],
           allow: [PermissionFlagsBits.ViewChannel],
+        },
+        {
+          id: government.id, // Government can post
+          allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages],
+        },
+        {
+          id: president.id, // President can post
+          allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages],
         },
       ],
     })
@@ -367,19 +406,11 @@ async function createAnnouncementChannels(
 
   const channels: TextChannel[] = [];
 
-  // Single #announcements channel (merged with game-announcements)
+  // Single #announcements channel
   channels.push(
     await getOrCreateChannel(guild, 'announcements', {
       parent: category,
       topic: 'Server and game announcements',
-    })
-  );
-
-  // #voting - Lithuania can view, Government can post
-  channels.push(
-    await getOrCreateChannel(guild, 'voting', {
-      parent: category,
-      topic: 'Government voting and polls',
     })
   );
 
@@ -423,9 +454,17 @@ async function createCommunityChannels(
     })
   );
 
-  // #chat - Lithuania only
+  // #chat - Everyone who is verified
   channels.push(
     await getOrCreateChannel(guild, 'chat', {
+      parent: category,
+      topic: 'General chat for all verified players',
+    })
+  );
+
+  // #lithuania-chat - Only verified Lithuania
+  channels.push(
+    await getOrCreateChannel(guild, 'lithuania-chat', {
       parent: category,
       topic: 'Chat for verified Lithuanian citizens',
       permissionOverwrites: [
@@ -434,7 +473,7 @@ async function createCommunityChannels(
           deny: [PermissionFlagsBits.ViewChannel],
         },
         {
-          id: verified.id, // Verified users can't see this by default
+          id: verified.id, // Other verified users can't see this
           deny: [PermissionFlagsBits.ViewChannel],
         },
         {
@@ -457,13 +496,67 @@ async function createCommunityChannels(
 }
 
 /**
+ * Creates voting channels
+ */
+async function createVotingChannels(
+  guild: Guild,
+  lithuania: Role,
+  government: Role,
+  president: Role
+): Promise<TextChannel[]> {
+  const category = await getOrCreateCategory(guild, '🗳️ VOTING');
+  const channels: TextChannel[] = [];
+
+  // #government-voting - Only leadership
+  channels.push(
+    await getOrCreateChannel(guild, 'government-voting', {
+      parent: category,
+      topic: 'Internal government voting and discussions',
+      permissionOverwrites: [
+        {
+          id: guild.id, // @everyone
+          deny: [PermissionFlagsBits.ViewChannel],
+        },
+        {
+          id: government.id,
+          allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages],
+        },
+        {
+          id: president.id,
+          allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages],
+        },
+      ]
+    })
+  );
+
+  // #public-voting - Every verified Lithuanian
+  channels.push(
+    await getOrCreateChannel(guild, 'public-voting', {
+      parent: category,
+      topic: 'Public voting for Lithuanian citizens',
+      permissionOverwrites: [
+        {
+          id: guild.id, // @everyone
+          deny: [PermissionFlagsBits.ViewChannel],
+        },
+        {
+          id: lithuania.id,
+          allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages],
+        },
+      ]
+    })
+  );
+
+  return channels;
+}
+
+/**
  * Creates the government channel (restricted to leadership)
  */
 async function createGovernmentChannel(
   guild: Guild,
   government: Role,
-  president: Role,
-  mods: Role
+  president: Role
 ): Promise<TextChannel> {
   const category = await getOrCreateCategory(guild, '🏛️ GOVERNMENT', [
     {
@@ -476,10 +569,6 @@ async function createGovernmentChannel(
     },
     {
       id: president.id,
-      allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages],
-    },
-    {
-      id: mods.id,
       allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages],
     },
   ]);
@@ -497,8 +586,7 @@ async function createEmbassyStructure(
   guild: Guild,
   countryRoles: Map<string, Role>,
   government: Role,
-  president: Role,
-  mods: Role
+  president: Role
 ): Promise<Map<string, TextChannel>> {
   const embassyChannels = new Map<string, TextChannel>();
   let totalCreated = 0;
@@ -534,7 +622,39 @@ async function createEmbassyStructure(
           channel.parentId === category.id
       ) as TextChannel | undefined;
 
+      const permissionOverwrites: OverwriteResolvable[] = [
+        {
+          id: guild.id, // @everyone - hidden
+          deny: [PermissionFlagsBits.ViewChannel],
+        },
+        {
+          id: countryRole.id, // Country citizens can access
+          allow: [
+            PermissionFlagsBits.ViewChannel,
+            PermissionFlagsBits.SendMessages,
+            PermissionFlagsBits.ReadMessageHistory,
+          ],
+        },
+        {
+          id: government.id, // Government can access
+          allow: [
+            PermissionFlagsBits.ViewChannel,
+            PermissionFlagsBits.SendMessages,
+            PermissionFlagsBits.ReadMessageHistory,
+          ],
+        },
+        {
+          id: president.id, // President can access
+          allow: [
+            PermissionFlagsBits.ViewChannel,
+            PermissionFlagsBits.SendMessages,
+            PermissionFlagsBits.ReadMessageHistory,
+          ],
+        },
+      ];
+
       if (existingChannel) {
+        await existingChannel.permissionOverwrites.set(permissionOverwrites);
         embassyChannels.set(countryName, existingChannel);
         totalSkipped++;
         continue;
@@ -546,44 +666,7 @@ async function createEmbassyStructure(
           type: ChannelType.GuildText,
           parent: category.id,
           topic: `Embassy channel for ${countryName} citizens`,
-          permissionOverwrites: [
-            {
-              id: guild.id, // @everyone - hidden
-              deny: [PermissionFlagsBits.ViewChannel],
-            },
-            {
-              id: countryRole.id, // Country citizens can access
-              allow: [
-                PermissionFlagsBits.ViewChannel,
-                PermissionFlagsBits.SendMessages,
-                PermissionFlagsBits.ReadMessageHistory,
-              ],
-            },
-            {
-              id: government.id, // Government can access
-              allow: [
-                PermissionFlagsBits.ViewChannel,
-                PermissionFlagsBits.SendMessages,
-                PermissionFlagsBits.ReadMessageHistory,
-              ],
-            },
-            {
-              id: president.id, // President can access
-              allow: [
-                PermissionFlagsBits.ViewChannel,
-                PermissionFlagsBits.SendMessages,
-                PermissionFlagsBits.ReadMessageHistory,
-              ],
-            },
-            {
-              id: mods.id, // Mods can access
-              allow: [
-                PermissionFlagsBits.ViewChannel,
-                PermissionFlagsBits.SendMessages,
-                PermissionFlagsBits.ReadMessageHistory,
-              ],
-            },
-          ],
+          permissionOverwrites,
           reason: `Bot setup: ${countryName} embassy channel`,
         });
 
@@ -600,4 +683,32 @@ async function createEmbassyStructure(
 
   console.log(`  Embassy summary: Created ${totalCreated}, Skipped ${totalSkipped}`);
   return embassyChannels;
+}
+
+/**
+ * Ensures leadership roles are positioned at the top of the hierarchy
+ */
+async function ensureLeadershipRolesPosition(guild: Guild, roles: Role[]): Promise<void> {
+  try {
+    // Only move roles if we are the owner or have high enough position
+    const botMember = await guild.members.fetchMe();
+    if (!botMember.permissions.has(PermissionFlagsBits.ManageRoles)) return;
+
+    // Position roles just below the bot's highest role
+    const highestBotRole = botMember.roles.highest;
+    const targetPosition = highestBotRole.position - 1;
+
+    if (targetPosition <= 0) return;
+
+    for (let i = 0; i < roles.length; i++) {
+      const role = roles[i];
+      if (role.position < targetPosition - i) {
+        console.log(`  Moving @${role.name} to position ${targetPosition - i}...`);
+        await role.setPosition(targetPosition - i);
+        await new Promise(resolve => setTimeout(resolve, 500));
+      }
+    }
+  } catch (error) {
+    console.error('  ⚠️ Failed to reorder roles:', error);
+  }
 }

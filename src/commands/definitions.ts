@@ -25,6 +25,12 @@ export const commands = [
     .setDMPermission(false),
 
   new SlashCommandBuilder()
+    .setName('update')
+    .setDescription('Update server roles and channels with new changes (Admin only)')
+    .setDefaultMemberPermissions(PermissionFlagsBits.Administrator)
+    .setDMPermission(false),
+
+  new SlashCommandBuilder()
     .setName('cleanup')
     .setDescription('Remove all bot-created roles and channels (Admin only)')
     .setDefaultMemberPermissions(PermissionFlagsBits.Administrator)

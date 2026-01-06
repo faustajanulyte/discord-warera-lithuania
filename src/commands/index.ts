@@ -1,6 +1,7 @@
 import type { ChatInputCommandInteraction } from 'discord.js';
 import { handleIdentify } from './handlers/identify.js';
 import { handleSetup } from './handlers/setup.js';
+import { handleUpdate } from './handlers/update.js';
 import { handleCleanup } from './handlers/cleanup.js';
 
 export { commands } from './definitions.js';
@@ -13,6 +14,7 @@ type CommandHandler = (interaction: ChatInputCommandInteraction) => Promise<void
 const commandHandlers: Record<string, CommandHandler> = {
   identify: handleIdentify,
   setup: handleSetup,
+  update: handleUpdate,
   cleanup: handleCleanup,
 };
 
