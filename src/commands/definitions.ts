@@ -14,10 +14,23 @@ export const commands = [
   new SlashCommandBuilder()
     .setName('identify')
     .setDescription('Verify your WarEra character and get country roles')
-    .addStringOption((option) =>
-      option.setName('username').setDescription('Your WarEra username').setRequired(true)
+    .addSubcommand(command =>
+      command
+        .setName('username')
+        .setDescription('Identify by username')
+        .addStringOption((option) =>
+          option.setName('value').setDescription('Your WarEra username').setRequired(true)
+        )
+    )
+    .addSubcommand(command =>
+      command
+        .setName('id')
+        .setDescription('Identify by ID')
+        .addStringOption((option) =>
+          option.setName('value').setDescription('Your WarEra ID').setRequired(true)
+        )
     ),
-
+  
   new SlashCommandBuilder()
     .setName('setup')
     .setDescription('Set up the server with roles, channels, and embassies (Admin only)')

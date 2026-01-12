@@ -4,12 +4,21 @@ import { WARERA_COUNTRY_MAP } from '../../config/countries.js';
 
 export async function handleIdentify(interaction: ChatInputCommandInteraction): Promise<void> {
   await interaction.deferReply({ ephemeral: true });
-  const wareraUsername = interaction.options.getString('username', true);
+
+  const subcommand = interaction.options.getSubcommand();
   const userId = interaction.user.id;
+
+  const wareraUsername = subcommand === 'username'
+    ? interaction.options.getString('value', true)
+    : null;
+
+  const wareraId = subcommand === 'id'
+    ? interaction.options.getString('value', true)
+    : null;
 
   try {
     // Verify with WarEra API
-    const result = await verifyUserWithWarEra(userId, wareraUsername);
+    const result = await verifyUserWithWarEra(userId, wareraUsername, wareraId);
 
     if (!result.success) {
       await interaction.editReply({
@@ -54,7 +63,7 @@ export async function handleIdentify(interaction: ChatInputCommandInteraction): 
     }
 
     let responseMessage = `✅ **Successfully verified!**\n`;
-    responseMessage += `**WarEra Username:** ${wareraUsername}\n`;
+    responseMessage += `**WarEra Username:** ${result.username}\n`;
 
     if (result.countryName) {
       responseMessage += `**Country:** ${result.countryName}\n`;
