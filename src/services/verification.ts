@@ -10,17 +10,18 @@ import { verifyWarEraCharacter } from './warera.js';
  */
 export async function verifyUserWithWarEra(
   userId: string,
-  wareraUsername: string
+  wareraUsername: string | null,
+  wareraId: string | null
 ): Promise<{
   success: boolean;
   message: string;
   countryName?: string;
-  countryId?: number;
+  username?: string;
 }> {
   // Call WarEra API to verify character
-  const result = await verifyWarEraCharacter(wareraUsername);
+  const result = await verifyWarEraCharacter(wareraUsername, wareraId);
 
-  if (!result.success || !result.user) {
+  if (!result.success) {
     return {
       success: false,
       message: result.error || 'Failed to verify WarEra character.',
@@ -35,6 +36,6 @@ export async function verifyUserWithWarEra(
     success: true,
     message: 'Successfully verified with WarEra!',
     countryName: result.country?.name,
-    countryId: result.user.countryId,
+    username: result.user.username,
   };
 }
