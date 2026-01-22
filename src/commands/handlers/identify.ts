@@ -1,11 +1,22 @@
 import type { ChatInputCommandInteraction } from 'discord.js';
 import { verifyUserWithWarEra } from '../../services/verification.js';
 import { WARERA_COUNTRY_MAP } from '../../config/countries.js';
+import { env } from '../../config/env.js';
 
 export async function handleIdentify(interaction: ChatInputCommandInteraction): Promise<void> {
   await interaction.deferReply({ ephemeral: true });
-  const wareraUsername = interaction.options.getString('username', true);
+  
   const userId = interaction.user.id;
+  const member = await interaction.guild!.members.fetch(userId);
+
+  if (member.roles.cache.has(env.VERIFIED_ROLE_ID)) {
+    await interaction.editReply({
+      content: "❌ You're already verified."
+    });
+    return;
+  }
+
+  const wareraUsername = interaction.options.getString('username', true);
 
   try {
     // Verify with WarEra API
@@ -18,7 +29,6 @@ export async function handleIdentify(interaction: ChatInputCommandInteraction): 
       return;
     }
 
-    const member = await interaction.guild!.members.fetch(userId);
     const roleNames: string[] = [];
 
     // Find and assign Verified role
